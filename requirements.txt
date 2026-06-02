@@ -1,0 +1,19 @@
+# Core
+numpy
+pandas
+matplotlib
+scikit-learn
+Pillow
+xgboost
+seaborn
+
+# TensorFlow (for ResNet50 + InceptionV3)
+tensorflow>=2.12.0
+
+# PyTorch (for MobileViT + Swin Transformer)
+torch>=2.0.0
+torchvision>=0.15.0
+
+# HuggingFace (for MobileViT + Swin)
+transformers>=4.35.0
+timm>=0.9.0

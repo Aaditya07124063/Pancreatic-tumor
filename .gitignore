@@ -1,0 +1,32 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS Files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Datasets (Local CT scan images)
+train/
+test/
+
+# Heavy Deep Learning Model Weights (>100MB, exceeds GitHub limits)
+*.keras
+*.pt
+*.pth
+*.h5
+*.weights
+*.ckpt
+
+# Output logs and caches
+outputs_logs/*.log
+feature_extraction_outputs/**/*.csv
+feature_extraction_outputs/**/*.png
