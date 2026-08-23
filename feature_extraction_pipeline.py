@@ -46,6 +46,8 @@ from sklearn.metrics import (accuracy_score, f1_score,
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 
+import data_utils as du
+
 # ─── REPRODUCIBILITY ──────────────────────────────────────────────────────────
 def set_seed(seed):
     os.environ["PYTHONHASHSEED"] = str(seed)
@@ -150,8 +152,12 @@ def main():
     parser = argparse.ArgumentParser(description="Feature Extraction CT Classifier Pipeline")
     parser.add_argument("--backbone", type=str, default="xception", choices=["xception", "densenet121"],
                         help="Feature extractor backbone model")
-    parser.add_argument("--split-mode", type=str, default="split_dir", choices=["split_dir", "stratified"],
-                        help="Data loading and splitting mode")
+    parser.add_argument("--split-mode", type=str, default="stratified", choices=["split_dir", "stratified"],
+                        help="Data loading and splitting mode. 'stratified' (default) uses the "
+                             "deduplicated corpus with the same 80/10/10 protocol as the Track A "
+                             "fine-tuning scripts. 'split_dir' reproduces the original leaky setup "
+                             "(train/ vs test/ directories, no deduplication) and is kept only for "
+                             "comparison.")
     parser.add_argument("--epochs", type=int, default=20,
                         help="Epochs for training neural network classifiers (LSTM, Bi-LSTM)")
     parser.add_argument("--batch-size", type=int, default=32,
@@ -184,12 +190,9 @@ def main():
         test_paths, test_labels = get_image_paths_labels("./test", CLASSES)
         print(f"  Found {len(train_paths)} train images and {len(test_paths)} test images.")
     else:
-        print("[INFO] Merging all data from 'train' and 'test' folders for stratified seed splitting...")
-        tr_paths, tr_labels = get_image_paths_labels("./train", CLASSES)
-        te_paths, te_labels = get_image_paths_labels("./test", CLASSES)
-        all_paths = np.concatenate([tr_paths, te_paths])
-        all_labels = np.concatenate([tr_labels, te_labels])
-        print(f"  Found {len(all_paths)} total images across folders.")
+        print("[INFO] Loading deduplicated corpus for stratified seed splitting...")
+        all_paths, all_labels = du.load_merged_dataset(dedupe=True)
+        print(f"  Found {len(all_paths)} unique images after content-hash deduplication.")
 
     # Build the feature extractor base model
     extractor, preprocess_fn = build_feature_extractor(args.backbone, IMG_SIZE)
@@ -213,12 +216,9 @@ def main():
                 test_paths, test_labels, test_size=0.5, random_state=seed, stratify=test_labels
             )
         else:
-            # 80% train, 10% val, 10% test stratified seed splitting
-            tr_p, tmp_p, tr_l, tmp_l = train_test_split(
-                all_paths, all_labels, test_size=0.2, random_state=seed, stratify=all_labels
-            )
-            va_p, te_p, va_l, te_l = train_test_split(
-                tmp_p, tmp_l, test_size=0.5, random_state=seed, stratify=tmp_l
+            # 80/10/10 stratified split, identical to the Track A fine-tuning scripts
+            tr_p, va_p, te_p, tr_l, va_l, te_l = du.stratified_split(
+                all_paths, all_labels, seed
             )
 
         print(f"  Splits size -> Train: {len(tr_p)} | Val: {len(va_p)} | Test: {len(te_p)}")
