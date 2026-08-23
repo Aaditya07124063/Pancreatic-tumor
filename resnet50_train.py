@@ -18,31 +18,17 @@ from tensorflow.keras import layers, models, optimizers
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import (precision_score, recall_score, f1_score,
-                             cohen_kappa_score, confusion_matrix,
-                             classification_report)
+                             cohen_kappa_score, confusion_matrix)
+
+from data_utils import (CLASSES, SEEDS, EPOCHS, PATIENCE,
+                        load_merged_dataset, stratified_split, print_split_summary)
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
-DATA_DIR   = "./train"
-CLASSES    = ["normal", "pancreatic_tumor"]
 IMG_SIZE   = (224, 224)
 BATCH_SIZE = 32
-EPOCHS     = 25
-SEEDS      = [42, 7, 21, 99, 123]
 OUTPUT_DIR = "./resnet50_outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-# ─── DATA LOADING ─────────────────────────────────────────────────────────────
-def load_dataset(data_dir, classes):
-    paths, labels = [], []
-    for label, cls in enumerate(classes):
-        cls_dir = os.path.join(data_dir, cls)
-        for fname in os.listdir(cls_dir):
-            if fname.lower().endswith((".jpg", ".jpeg", ".png")):
-                paths.append(os.path.join(cls_dir, fname))
-                labels.append(label)
-    return np.array(paths), np.array(labels)
 
 
 def load_images(paths, img_size):
@@ -71,14 +57,16 @@ def augment(image):
     return image
 
 
-def make_dataset(paths, labels, img_size, augment_flag, batch_size, seed):
+def make_dataset(paths, labels, img_size, augment_flag, batch_size, shuffle=False, seed=42):
     images = load_images(paths, img_size)
     images = preprocess_input(images)
     ds = tf.data.Dataset.from_tensor_slices((images, labels))
     if augment_flag:
         ds = ds.map(lambda x, y: (augment(x), y),
                     num_parallel_calls=tf.data.AUTOTUNE)
-    ds = ds.shuffle(buffer_size=len(paths), seed=seed).batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    if shuffle:
+        ds = ds.shuffle(buffer_size=len(paths), seed=seed)
+    ds = ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
     return ds
 
 
@@ -118,19 +106,17 @@ def set_seed(seed):
 def train_one_seed(seed, all_paths, all_labels):
     set_seed(seed)
 
-    tr_p, tmp_p, tr_l, tmp_l = train_test_split(
-        all_paths, all_labels, test_size=0.2, stratify=all_labels, random_state=seed)
-    va_p, te_p, va_l, te_l   = train_test_split(
-        tmp_p, tmp_l, test_size=0.5, stratify=tmp_l, random_state=seed)
+    tr_p, va_p, te_p, tr_l, va_l, te_l = stratified_split(all_paths, all_labels, seed)
+    print_split_summary(tr_l, va_l, te_l)
 
-    train_ds = make_dataset(tr_p, tr_l, IMG_SIZE, True,  BATCH_SIZE, seed)
-    val_ds   = make_dataset(va_p, va_l, IMG_SIZE, False, BATCH_SIZE, seed)
-    test_ds  = make_dataset(te_p, te_l, IMG_SIZE, False, BATCH_SIZE, seed)
+    train_ds = make_dataset(tr_p, tr_l, IMG_SIZE, True,  BATCH_SIZE, shuffle=True, seed=seed)
+    val_ds   = make_dataset(va_p, va_l, IMG_SIZE, False, BATCH_SIZE, shuffle=False)
+    test_ds  = make_dataset(te_p, te_l, IMG_SIZE, False, BATCH_SIZE, shuffle=False)
 
     model = build_model()
 
     callbacks = [
-        EarlyStopping(monitor="val_accuracy", patience=10,
+        EarlyStopping(monitor="val_accuracy", patience=PATIENCE,
                       restore_best_weights=True, verbose=0),
         ReduceLROnPlateau(monitor="val_loss", factor=0.5,
                           patience=5, verbose=0)
@@ -142,18 +128,23 @@ def train_one_seed(seed, all_paths, all_labels):
     )
 
     train_loss, train_acc = model.evaluate(
-        make_dataset(tr_p, tr_l, IMG_SIZE, False, BATCH_SIZE, seed), verbose=0)
+        make_dataset(tr_p, tr_l, IMG_SIZE, False, BATCH_SIZE, shuffle=False), verbose=0)
     val_loss,   val_acc   = model.evaluate(val_ds,  verbose=0)
     test_loss,  test_acc  = model.evaluate(test_ds, verbose=0)
 
-    y_prob = model.predict(test_ds, verbose=0).ravel()
-    y_pred = (y_prob >= 0.5).astype(int)
+    y_true, y_pred = [], []
+    for batch_x, batch_y in test_ds:
+        probs = model.predict(batch_x, verbose=0).ravel()
+        y_true.extend(batch_y.numpy().astype(int))
+        y_pred.extend((probs >= 0.5).astype(int))
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
 
-    prec   = precision_score(te_l, y_pred, zero_division=0)
-    rec    = recall_score(te_l, y_pred, zero_division=0)
-    f1     = f1_score(te_l, y_pred, zero_division=0)
-    kappa  = cohen_kappa_score(te_l, y_pred)
-    cm     = confusion_matrix(te_l, y_pred)
+    prec   = precision_score(y_true, y_pred, zero_division=0)
+    rec    = recall_score(y_true, y_pred, zero_division=0)
+    f1     = f1_score(y_true, y_pred, zero_division=0)
+    kappa  = cohen_kappa_score(y_true, y_pred)
+    cm     = confusion_matrix(y_true, y_pred)
 
     model.save(os.path.join(OUTPUT_DIR, f"resnet50_seed{seed}.keras"))
 
@@ -162,7 +153,7 @@ def train_one_seed(seed, all_paths, all_labels):
         "test_acc": test_acc, "test_loss": test_loss,
         "precision": prec, "recall": rec, "f1": f1,
         "kappa": kappa, "cm": cm, "history": history,
-        "y_true": te_l, "y_pred": y_pred,
+        "y_true": y_true, "y_pred": y_pred,
     }
 
 
@@ -207,8 +198,8 @@ def main():
     print("  ResNet50 — Pancreatic CT Classification  |  5-Seed Eval")
     print("=" * 65)
 
-    all_paths, all_labels = load_dataset(DATA_DIR, CLASSES)
-    print(f"Total images: {len(all_paths)}  |  Classes: {CLASSES}\n")
+    all_paths, all_labels = load_merged_dataset(dedupe=True)
+    print(f"Total deduplicated images: {len(all_paths)}  |  Classes: {CLASSES}\n")
 
     results = []
     for seed in SEEDS:

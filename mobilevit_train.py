@@ -24,18 +24,15 @@ from transformers import (MobileViTForImageClassification,
                           MobileViTFeatureExtractor)
 
 from PIL import Image
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import (precision_score, recall_score, f1_score,
                              cohen_kappa_score, confusion_matrix)
 
+from data_utils import (CLASSES, SEEDS, EPOCHS, PATIENCE,
+                        load_merged_dataset, stratified_split, print_split_summary)
+
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
-DATA_DIR   = "./train"
-CLASSES    = ["normal", "pancreatic_tumor"]
 IMG_SIZE   = 224
 BATCH_SIZE = 32
-EPOCHS     = 25
-SEEDS      = [42, 7, 21, 99, 123]
-PATIENCE   = 10
 LR         = 1e-4
 OUTPUT_DIR = "./mobilevit_outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -44,17 +41,6 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else ("mps" if torch.b
 print(f"Using device: {DEVICE}")
 
 # ─── DATA LOADING ─────────────────────────────────────────────────────────────
-def load_dataset(data_dir, classes):
-    paths, labels = [], []
-    for label, cls in enumerate(classes):
-        cls_dir = os.path.join(data_dir, cls)
-        for fname in os.listdir(cls_dir):
-            if fname.lower().endswith((".jpg", ".jpeg", ".png")):
-                paths.append(os.path.join(cls_dir, fname))
-                labels.append(label)
-    return np.array(paths), np.array(labels)
-
-
 # ─── DATASET CLASS ────────────────────────────────────────────────────────────
 class PancreaticDataset(Dataset):
     def __init__(self, paths, labels, transform):
@@ -150,12 +136,8 @@ def run_epoch(model, loader, criterion, optimizer=None, training=False):
 def train_one_seed(seed, all_paths, all_labels):
     set_seed(seed)
 
-    tr_p, tmp_p, tr_l, tmp_l = train_test_split(
-        all_paths, all_labels, test_size=0.2,
-        stratify=all_labels, random_state=seed)
-    va_p, te_p, va_l, te_l   = train_test_split(
-        tmp_p, tmp_l, test_size=0.5,
-        stratify=tmp_l, random_state=seed)
+    tr_p, va_p, te_p, tr_l, va_l, te_l = stratified_split(all_paths, all_labels, seed)
+    print_split_summary(tr_l, va_l, te_l)
 
     train_loader = DataLoader(
         PancreaticDataset(tr_p, tr_l, get_transforms(True)),
@@ -268,8 +250,8 @@ def main():
     print("  MobileViT — Pancreatic CT Classification  |  5-Seed Eval")
     print("=" * 65)
 
-    all_paths, all_labels = load_dataset(DATA_DIR, CLASSES)
-    print(f"Total images: {len(all_paths)}  |  Classes: {CLASSES}\n")
+    all_paths, all_labels = load_merged_dataset(dedupe=True)
+    print(f"Total deduplicated images: {len(all_paths)}  |  Classes: {CLASSES}\n")
 
     results = []
     for seed in SEEDS:

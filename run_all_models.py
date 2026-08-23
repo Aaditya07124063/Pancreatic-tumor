@@ -19,7 +19,9 @@ MODELS = [
     "resnet50_train.py",
     "inceptionv3_train.py",
     "mobilevit_train.py",
-    "swin_transformer_train.py"
+    "swin_transformer_train.py",
+    "cnn_scratch_train.py",
+    "vit_scratch_train.py",
 ]
 
 LOG_DIR = "./outputs_logs"
@@ -37,10 +39,11 @@ def run_model_training(script_name):
     # Run the script using the virtual environment python interpreter
     with open(log_file, "w") as lf:
         process = subprocess.Popen(
-            [".venv/bin/python", script_name],
+            [".venv/bin/python", "-u", script_name],
             stdout=lf,
             stderr=subprocess.STDOUT,
-            text=True
+            text=True,
+            bufsize=1,
         )
         
         # Monitor the execution and print progress heartbeats

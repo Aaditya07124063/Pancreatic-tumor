@@ -28,5 +28,9 @@ test/
 
 # Output logs and caches
 outputs_logs/*.log
+.dataset_cache.pkl
 feature_extraction_outputs/**/*.csv
 feature_extraction_outputs/**/*.png
+
+# Archive bundles (exceed GitHub's 100MB per-file limit; their contents are tracked already)
+*.zip
