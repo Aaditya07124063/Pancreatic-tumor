@@ -16,9 +16,13 @@ from sklearn.model_selection import train_test_split
 
 CLASSES = ["normal", "pancreatic_tumor"]
 DATA_DIRS = ["./train", "./test"]
-SEEDS = [42, 7, 21, 99, 123]
-EPOCHS = 50
-PATIENCE = 15
+
+# Defaults are the reported experimental protocol: 5 seeds x 50 epochs.
+# SEEDS/EPOCHS may be overridden via environment variables for smoke tests,
+# e.g. EPOCHS=1 SEEDS=42 python resnet50_train.py
+SEEDS = [int(s) for s in os.environ.get("SEEDS", "42,7,21,99,123").split(",")]
+EPOCHS = int(os.environ.get("EPOCHS", "50"))
+PATIENCE = int(os.environ.get("PATIENCE", "15"))
 CACHE_PATH = "./.dataset_cache.pkl"
 
 
