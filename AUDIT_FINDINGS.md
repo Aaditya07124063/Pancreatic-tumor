@@ -1,6 +1,6 @@
 # Response to review comments — pancreatic CT classification
 
-Status: full 6-model protocol re-running as of 2026-08-24 (see "Protocol now running").
+Status: 6-model benchmark **complete** (see "Results"). Control experiment and Track B still running as of 2026-08-26.
 This document answers each review point with the evidence behind it.
 
 ---
@@ -95,23 +95,39 @@ the images themselves.
 
 ---
 
-## Protocol now running
+## Results — the completed protocol
 
-Every review request is implemented; the numbers are being regenerated from scratch:
+Every review request is implemented. Protocol: deduplicated corpus (1,179 images),
+**stratified 80:10:10**, **5 seeds** (42, 7, 21, 99, 123), **50 epochs** per seed with
+`PATIENCE=50` so early stopping cannot cut the budget short (best-validation weights
+still restored for evaluation).
 
-- deduplicated corpus (1,179 images), **stratified 80:10:10**
-- **5 seeds** (42, 7, 21, 99, 123), mean ± SD reported
-- **50 epochs** per seed, `PATIENCE=50` so early stopping cannot cut the budget short
-  (best-validation weights still restored for evaluation)
-- **6 models**: ResNet50, InceptionV3, MobileViT, Swin-Tiny (pretrained) plus
-  **`ScratchCNN`** (from-scratch CNN) and **`VisionTransformer`** (from-scratch ViT: hand-written multi-head attention, patch embedding, CLS token — `new transformer scratch/models/`)
-- the shortcut floor (100%) is reported in the same table, so every model is read against
-  what a non-diagnostic rule already achieves — not against 50%
+| Model | Type | Test accuracy | κ | Perfect seeds |
+|:---|:---|---:|---:|---:|
+| ResNet50 | CNN, pretrained | 100.00 ± 0.00 | 1.0000 | 5/5 |
+| InceptionV3 | CNN, pretrained | 99.83 ± 0.38 | 0.9966 | 4/5 |
+| MobileViT | Transformer, pretrained | 100.00 ± 0.00 | 1.0000 | 5/5 |
+| Swin-Tiny | Transformer, pretrained | 100.00 ± 0.00 | 1.0000 | 5/5 |
+| **ScratchCNN** | CNN, **from scratch** | 100.00 ± 0.00 | 1.0000 | 5/5 |
+| **ScratchViT** | Transformer, **from scratch** | 99.83 ± 0.38 | 0.9966 | 4/5 |
+| *Brightness threshold* | *no learning at all* | *100.00 ± 0.00* | *1.0000* | *5/5* |
+
+Accuracy, F1 and κ now agree with one another. The earlier CSVs reported ~98% accuracy
+alongside κ ≈ 0, which is arithmetically impossible and came from a test-set shuffling
+defect; that is fixed.
+
+**The comparison is not identifiable.** All six models fall inside a 0.17-point band —
+smaller than the seed-to-seed variation. A 4-layer CNN trained from scratch with no
+pretraining matches Swin Transformer exactly, and both match a single brightness
+threshold that never looks at the pancreas. That is the signature of a corpus separable
+by a rendering artefact, not of an architecture difference.
 
 Reproduce with:
 
 ```
-./run_all.sh
+./run_all.sh          # the six-model benchmark
+./run_control.sh      # the provenance-matched control
+./run_track_b.sh      # frozen extractors + classical classifiers
 ```
 
 ## Recommendation
