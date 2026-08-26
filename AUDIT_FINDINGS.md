@@ -1,6 +1,6 @@
 # Response to review comments — pancreatic CT classification
 
-Status: 6-model benchmark **complete** (see "Results"). Control experiment and Track B still running as of 2026-08-26.
+Status: **all experiments complete** as of 2026-08-26.
 This document answers each review point with the evidence behind it.
 
 ---
@@ -129,6 +129,40 @@ Reproduce with:
 ./run_control.sh      # the provenance-matched control
 ./run_track_b.sh      # frozen extractors + classical classifiers
 ```
+
+
+## The decisive experiment
+
+The control could not move the result, so the cause had to be located rather than
+assumed. All arms below run under the strictest control condition (rank-equalised
+intensities, group-aware splits); only the visible region changes.
+
+| What the model can see | Test accuracy | κ |
+|:---|---:|---:|
+| Whole scan | 99.82 ± 0.39 | 0.997 |
+| **Pancreas deleted** (central 60% blanked) | **99.81 ± 0.41** | 0.996 |
+| Anatomy only | 98.70 ± 2.91 | 0.974 |
+| **8×8 thumbnail** | **99.82 ± 0.39** | 0.997 |
+
+Deleting the organ costs 0.01 points. Reducing each scan to 64 pixels costs nothing.
+Sixty-four pixels cannot represent tumour morphology, and the blanked arm contains no
+pancreas at all — so the classes are separated by coarse image properties lying outside
+the anatomy. The anatomy-only arm is both lower and six times more variable, making it
+the *least* reliable cue available, which is the inverse of a genuine detector.
+
+### The control that returned null
+
+| Arm | Brightness | Leakage | Test accuracy |
+|:---|:---|:---|---:|
+| A | present | present | 100.00 ± 0.00 |
+| B | **removed** | present | 100.00 ± 0.00 |
+| C | present | **removed** | 100.00 ± 0.00 |
+| D | **removed** | **removed** | 100.00 ± 0.00 |
+
+Each fault is individually sufficient; removing both together changes nothing. The
+brightness artefact is real and by itself separates the corpus perfectly, but it is one
+of several non-diagnostic routes, not the explanation. This supersedes the earlier
+attribution.
 
 ## Recommendation
 
