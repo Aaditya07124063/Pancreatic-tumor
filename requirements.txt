@@ -17,3 +17,5 @@ torchvision>=0.15.0
 # HuggingFace (for MobileViT + Swin)
 transformers>=4.35.0
 timm>=0.9.0
+reportlab>=4.0
+pypdf>=4.0
